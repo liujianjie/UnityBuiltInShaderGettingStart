@@ -1,4 +1,4 @@
-Shader "Unity Shaders Book/Chapter 7/Normal Map In Tangent Space" 
+Shader "Unity Shaders Book/Chapter 7/Normal Map In World Space" 
 {
     Properties
     {
@@ -39,8 +39,9 @@ Shader "Unity Shaders Book/Chapter 7/Normal Map In Tangent Space"
             struct v2f{
                 float4 pos : SV_POSITION;
                 float4 uv : TEXCOORD0;
-                float3 lightDir : TEXCOORD1;
-                float3 viewDir : TEXCOORD2;
+                float4 TtoW0 : TEXCOORD1;
+                float4 TtoW1 : TEXCOORD2;
+                float4 TtoW2 : TEXCOORD3;
 
             };
 
@@ -51,42 +52,46 @@ Shader "Unity Shaders Book/Chapter 7/Normal Map In Tangent Space"
 
                 o.uv.xy = v.texcoord.xy * _MainTex_ST.xy + _MainTex_ST.zw;
                 o.uv.zw = v.texcoord.xy * _BumpMap_ST.xy + _BumpMap_ST.zw;
-
+                
+                float3 worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
                 // 切线空间的法线、切线、副切线 到世界空间下
                 fixed3 worldNormal = UnityObjectToWorldNormal(v.normal);            // 世界空间的法线
                 fixed3 worldTangent = UnityObjectToWorldDir(v.tangent.xyz);         // 世界空间的切线
                 fixed3 worldBinormal = cross(worldNormal, worldTangent) * v.tangent.w;  // 世界空间的副切线，v.tangent.w是方向
 
-                // 从世界空间到切线空间的变换矩阵
-                float3x3 worldToTangent = float3x3(worldTangent, worldBinormal, worldNormal);
+                // 从世界空间到切线空间的变换矩阵：按行摆放
+                //float3x3 worldToTangent = float3x3(worldTangent, worldBinormal, worldNormal);
 
-                // 将light和view从世界到切线空间
-                o.lightDir = mul(worldToTangent, WorldSpaceLightDir(v.vertex));
-                o.viewDir = mul(worldToTangent, WorldSpaceViewDir(v.vertex));
+                // 从切线空间到世界空间：按列摆放
+                o.TtoW0 = float4(worldTangent.x, worldBinormal.x, worldNormal.x, worldPos.x);
+                o.TtoW1 = float4(worldTangent.y, worldBinormal.y, worldNormal.y, worldPos.y);
+                o.TtoW2 = float4(worldTangent.z, worldBinormal.z, worldNormal.z, worldPos.z);
 
                 return o;
             }
             fixed4 frag(v2f i) : SV_TARGET{
-                fixed3 tangentLightDir = normalize(i.lightDir);
-                fixed3 tangenViewDir = normalize(i.viewDir);
+                // 世界空间的位置 = worldPos，但是没放在数据结构中。
+                float3 worldPos = float3(i.TtoW0.w, i.TtoW1.w, i.TtoW2.w);
+                fixed3 lightDir = normalize(UnityWorldSpaceLightDir(worldPos));
+                fixed3 viewDir = normalize(UnityWorldSpaceLightDir(worldPos));
 
-                // 从法线贴图中获取法线
-                fixed4 packedNormal = tex2D(_BumpMap, i.uv.zw);// 获得压缩的法线= 像素值
-                fixed3 tangentNormal;
+                // 在切线空间下获得法线
+                fixed3 bump = UnpackNormal(tex2D(_BumpMap, i.uv.zw));// 获得压缩的法线 = 像素值 并且// 解压法线：公式：normal = 2 * tex - 1
+                bump.xy *= _BumpScale;
 
-                tangentNormal = UnpackNormal(packedNormal);     // 解压法线：公式：normal = 2 * tex - 1
-
-                tangentNormal.xy *= _BumpScale;
-                tangentNormal.z = sqrt(1.0 - saturate(dot(tangentNormal.xy, tangentNormal. xy)));   // 直接三角形求第三边公式：勾股定理？
+                bump.z = sqrt(1.0 - saturate(dot(bump.xy, bump.xy))); // 直接三角形求第三边公式：勾股定理？
+                
+                // 将法线从切线到世界。就是3x3的矩阵乘以3x1的向量：矩阵的每一行与向量的点乘
+                bump = normalize(half3(dot(i.TtoW0.xyz, bump), dot(i.TtoW1.xyz, bump), dot(i.TtoW2.xyz, bump)));
 
                 fixed3 albedo = tex2D(_MainTex, i.uv).rgb * _Color.rgb;
 
                 float3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz * albedo;
 
-                float3 diffuse = _LightColor0.rgb * albedo * max(0, dot(tangentNormal, tangentLightDir));
+                float3 diffuse = _LightColor0.rgb * albedo * max(0, dot(bump, lightDir));
 
-                fixed3 halfDir = normalize(tangentLightDir + tangenViewDir);
-                fixed3 specular = _LightColor0.rgb * _Specular.rgb * pow(max(0, dot(tangentNormal, halfDir)), _Gloss);
+                fixed3 halfDir = normalize(lightDir + viewDir);
+                fixed3 specular = _LightColor0.rgb * _Specular.rgb * pow(max(0, dot(bump, halfDir)), _Gloss);
 
                 return fixed4(ambient + diffuse + specular, 1.0);
             }
