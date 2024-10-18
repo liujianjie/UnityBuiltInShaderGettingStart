@@ -42,7 +42,7 @@ Shader "Unity Shaders Book/Chapter 9/Shadow" {
             v2f vert(a2v v)
             {
                 v2f o;
-                o.pos2 = UnityObjectToClipPos(v.vertex);     // 顶点位置
+                o.pos = UnityObjectToClipPos(v.vertex);     // 顶点位置
 
                 o.worldNormal = UnityObjectToWorldNormal(v.normal); // 世界空间法线
 
