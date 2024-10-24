@@ -66,8 +66,8 @@ Shader "Unity Shaders Book/Chapter 9/Shadow" {
 
                 fixed atten = 1.0;
 
-				//fixed shadow = SHADOW_ATTENUATION(i);	// 从阴影纹理中获取阴影值
-				fixed shadow = 1.0;
+				fixed shadow = SHADOW_ATTENUATION(i);	// 从阴影纹理中获取阴影值
+				//fixed shadow = 1.0;					// 1.0是没有阴影
                 return fixed4(ambient + (diffuse + specular) * atten * shadow, 1.0);
             }
             ENDCG
