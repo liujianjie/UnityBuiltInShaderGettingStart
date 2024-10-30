@@ -1,10 +1,11 @@
-Shader "Unity Shaders Book/Chapter 10/Reflection" {
+Shader "Unity Shaders Book/Chapter 10/Refraction" {
     Properties
     {
         _Color ("Color Tint", Color) = (1,1,1,1)
-        _ReflectColor("Reflection Color", Color) = (1, 1, 1, 1)
-        _ReflectAmount("Reflect Amount", Range(0, 1)) = 1       // _ReflectAmount写错成_RflectAmount
-        _Cubemap("Reflection Cubemap", Cube) = "_Skybox" {}
+        _RefractColor("Refraction Color", Color) = (1, 1, 1, 1)
+        _RefractAmount("Refraction Amount", Range(0, 1)) = 1       // _ReflectAmount写错成_RflectAmount
+        _RefractRatio("Refraction Ratio", Range(0.1, 1)) = 0.5
+        _Cubemap("Refraction Cubemap", Cube) = "_Skybox" {}
     }
     SubShader
     {
@@ -22,8 +23,9 @@ Shader "Unity Shaders Book/Chapter 10/Reflection" {
 			#include "AutoLight.cginc"
 
             fixed4 _Color;
-            fixed4 _ReflectColor;
-            fixed _ReflectAmount;
+            fixed4 _RefractColor;
+            float _RefractAmount;
+            fixed _RefractRatio;
             samplerCUBE _Cubemap;
 
             struct a2v{
@@ -35,7 +37,7 @@ Shader "Unity Shaders Book/Chapter 10/Reflection" {
                 float3 worldPos : TEXCOORD0;
                 fixed3 worldNormal : TEXCOORD1;
                 fixed3 worldViewDir : TEXCOORD2;
-                fixed3 worldRefl : TEXCOORD3;
+                fixed3 worldRefr : TEXCOORD3;
                 SHADOW_COORDS(4)
             };
 
@@ -50,7 +52,8 @@ Shader "Unity Shaders Book/Chapter 10/Reflection" {
 
                 o.worldViewDir = UnityWorldSpaceViewDir(o.worldPos);
 
-                o.worldRefl = reflect(-o.worldViewDir, o.worldNormal);  // 计算世界空间下的反射向量
+                //o.worldRefr = reflect(-o.worldViewDir, o.worldNormal);  // 计算世界空间下的反射向量
+                o.worldRefr = refract(-normalize(o.worldViewDir), normalize(o.worldNormal), _RefractRatio);  // 计算世界空间下的折射向量))
 
 			 	TRANSFER_SHADOW(o);
                 return o;
@@ -61,16 +64,16 @@ Shader "Unity Shaders Book/Chapter 10/Reflection" {
                 fixed3 worldViewDir = normalize(i.worldViewDir);
 
                 fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz;
-                
+
                 // rgb 写错成 rbg
                 fixed3 diffuse = _LightColor0.rgb * _Color.rgb * max(0, dot(worldNormal, worldLightDir));
                 
                 // 使用世界空间下的反射向量去采样Cubemap
-                fixed3 reflection = texCUBE(_Cubemap, i.worldRefl).rgb * _ReflectColor.rgb;
+                fixed3 refraction = texCUBE(_Cubemap, i.worldRefr).rgb * _RefractColor.rgb;
 
                 UNITY_LIGHT_ATTENUATION(atten, i, i.worldPos);
 
-                fixed3 color = ambient + lerp(diffuse, reflection, _ReflectAmount) * atten;
+                fixed3 color = ambient + lerp(diffuse, refraction, _RefractAmount) * atten;
 
                 return fixed4(color, 1.0);
             }
