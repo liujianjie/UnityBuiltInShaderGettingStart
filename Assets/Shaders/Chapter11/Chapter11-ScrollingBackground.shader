@@ -61,5 +61,5 @@ Shader "Unity Shaders Book/Chapter 11/Scrolling Background"
             ENDCG
         }
     }
-    FallBack "Diffuse"
+    FallBack "VertexLit"
 }
