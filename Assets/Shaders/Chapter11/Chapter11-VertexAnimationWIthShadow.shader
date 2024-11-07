@@ -1,5 +1,4 @@
-Shader "Unity Shaders Book/Chapter 11/Water" 
-{
+Shader "Unity Shaders Book/Chapter 11/Vertex Animation With Shadow" {
     Properties
     {
         _MainTex("Main Tex", 2D) = "white" {}
@@ -11,12 +10,12 @@ Shader "Unity Shaders Book/Chapter 11/Water"
     }
     SubShader
     {
-        Tags { "RenderType"="Transparent" "Queue" = "Transparent" "IgnoreProjector"="True" "DisableBatching"="True"}
+        // 因为顶点动画，需要禁用顶点动画
+        Tags {  "DisableBatching"="True"}
+
         Pass{
             Tags{"LightMode" = "ForwardBase"}
 
-            ZWrite Off
-            Blend SrcAlpha OneMinusSrcAlpha
             Cull Off
 
             CGPROGRAM
@@ -66,7 +65,48 @@ Shader "Unity Shaders Book/Chapter 11/Water"
             }
             ENDCG
         }
+        // 自定义投影Pass生成
+        Pass{
+            Tags{"LightMode" = "ShadowCaster"}
+
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+
+            #pragma multi_compile_shadowcaster
+
+            #include "UnityCG.cginc"
+
+            float _Magnitude;
+            float _Frequency;
+            float _InvWaveLength;
+            float _Speed;
+
+            struct v2f{
+                V2F_SHADOW_CASTER;
+			};
+
+            v2f vert(appdata_base v)
+            {
+                v2f o;
+
+                float4 offset;
+                offset.yzw = float3(0.0, 0.0, 0.0);
+                // _Frequency * _Time.y控制正弦函数的频率，后续是为了不同的位置具有不同的位移 _Magnitude控制波动幅度
+                offset.x = sin(_Frequency * _Time.y + v.vertex.x * _InvWaveLength + v.vertex.y * _InvWaveLength + v.vertex.z * _InvWaveLength) * _Magnitude;
+                // o.pos = UnityObjectToClipPos(v.vertex + offset);
+                v.vertex = v.vertex + offset;
+
+                TRANSFER_SHADOW_CASTER_NORMALOFFSET(o);
+
+                return o;
+            }
+
+            fixed4 frag(v2f i) :SV_Target{
+                SHADOW_CASTER_FRAGMENT(i);
+            }
+            ENDCG
+        }
     }
-	// FallBack "Transparent/VertexLit" // 不能找到shadowcaster
-	FallBack "VertexLit"                // 可以找到shadowcaster
+	FallBack "VertexLit"
 }
