@@ -11,7 +11,7 @@ public class BrightnessSaturationAndContrast : PostEffectsBase
     {
         get
         {
-            briSatConMaterial = CheckShaderAndCretaeMaterial(briSatConShader, briSatConMaterial);
+            briSatConMaterial = CheckShaderAndCreateMaterial(briSatConShader, briSatConMaterial);
             return briSatConMaterial;
         }
     }

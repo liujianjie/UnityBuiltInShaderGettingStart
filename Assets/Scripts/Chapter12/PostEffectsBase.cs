@@ -45,7 +45,7 @@ public class PostEffectsBase : MonoBehaviour
     /// <param name="shader">特效需要的shader</param>
     /// <param name="material">用于后期处理的材质</param>
     /// <returns></returns>
-    protected Material CheckShaderAndCretaeMaterial(Shader shader, Material material)
+    protected Material CheckShaderAndCreateMaterial(Shader shader, Material material)
     {
         if (shader == null)
         {
