@@ -42,7 +42,7 @@ Shader "Unity Shaders Book/Chapter 12/Motion Blur" {
         // 混合A 通道，但是a 不写入到渲染纹理中，所以有两个pass。第一个混合a，第二个采样第一个输出的结果
         Pass{
             Blend SrcAlpha OneMinusSrcAlpha
-            ColorMask RGB
+            ColorMask RGB       // 只写入RGB通道
 
             CGPROGRAM
 
@@ -54,7 +54,7 @@ Shader "Unity Shaders Book/Chapter 12/Motion Blur" {
 
          Pass{
             Blend One Zero
-            ColorMask A
+            ColorMask A  // 只写入Alpha通道
 
             CGPROGRAM
 
@@ -66,62 +66,64 @@ Shader "Unity Shaders Book/Chapter 12/Motion Blur" {
     }
     FallBack Off
 }
-
 /*
- 非常抱歉我之前的解释还不够清晰。您提出了一个很好的问题，让我们更深入地分析这个算法过程，特别是如何实现将不够亮的像素值最终变为小于0（实际上是0）。
+让我详细解释这个运动模糊shader中两个Pass的作用和原理。
 
-让我们一步步分解这个过程：
+这个运动模糊效果是通过帧间混合实现的，两个Pass的设计非常巧妙：
 
-1. 首先，我们有原始的像素颜色 c，假设它是一个 float4 类型，表示 RGBA 值。
+### Pass 1 - RGB混合Pass
+```glsl
+Pass {
+    Blend SrcAlpha OneMinusSrcAlpha  // 关键混合模式
+    ColorMask RGB                     // 只写入RGB通道
+    ...
+    fragment fragRGB                  // 使用fragRGB片元着色器
+}
+```
+第一个Pass的作用：
+1. `Blend SrcAlpha OneMinusSrcAlpha` 设置混合模式为标准透明混合
+2. `ColorMask RGB` 表示只写入RGB颜色通道，不写入Alpha通道
+3. `fragRGB`返回的是：当前帧的RGB颜色和模糊系数(_BlurAmount)作为Alpha值
+4. 这个Pass实现了当前帧和之前帧的颜色混合，混合比例由_BlurAmount控制
 
-2. 计算亮度：
-   ```glsl
-   float pixelLuminance = luminance(c);
-   ```
-   这里 luminance() 函数计算像素的亮度，通常使用公式：
-   0.299 * R + 0.587 * G + 0.114 * B
+### Pass 2 - Alpha通道Pass
+```glsl
+Pass {
+    Blend One Zero        // 直接覆盖
+    ColorMask A           // 只写入Alpha通道
+    ...
+    fragment fragA        // 使用fragA片元着色器
+}
+```
+第二个Pass的作用：
+1. `ColorMask A` 表示只写入Alpha通道
+2. `Blend One Zero` 表示直接覆盖原值，不进行混合
+3. `fragA`直接返回原始纹理的采样结果
+4. 这个Pass确保Alpha通道保持正确的值，不受混合影响
 
-3. 计算亮度差值：
-   ```glsl
-   float luminanceDifference = pixelLuminance - _LuminanceThreshold;
-   ```
-   这一步是关键。如果像素亮度低于阈值，luminanceDifference 将为负值。
+### 为什么需要两个Pass？
 
-4. 使用 clamp 函数：
-   ```glsl
-   float val = clamp(luminanceDifference, 0.0, 1.0);
-   ```
-   这里是算法实现"小于0"的关键步骤：
-   - 如果 luminanceDifference 小于 0（即像素不够亮），clamp 函数会将其设置为 0
-   - 如果 luminanceDifference 在 0 到 1 之间，保持原值
-   - 如果 luminanceDifference 大于 1，设置为 1
+关键原因：
+1. **分离处理**：需要分别处理RGB和A通道，因为它们的处理逻辑不同
+   - RGB通道需要和上一帧混合，实现模糊效果
+   - Alpha通道需要保持原值，不参与混合
 
-5. 最后的乘法操作：
-   ```glsl
-   fixed4 result = c * val;
-   ```
-   这一步确保了不够亮的像素最终变为黑色（0,0,0,0）：
-   - 对于不够亮的像素，val 为 0，所以 c * 0 = (0,0,0,0)
-   - 对于足够亮的像素，val 大于 0，颜色会被保留或略微变暗
+2. **避免Alpha累积**：
+   - 如果在一个Pass中同时处理RGB和A，Alpha值会随着帧的累积而改变
+   - 错误的Alpha累积会导致图像逐渐变得过于透明或不透明
 
-算法过程示例：
+3. **正确的混合次序**：
+   - 第一个Pass进行RGB的混合，使用_BlurAmount作为混合因子
+   - 第二个Pass恢复正确的Alpha值，确保下一帧混合时有正确的透明度信息
 
-假设我们有一个像素，其 RGB 值为 (0.2, 0.2, 0.2)，而 _LuminanceThreshold 设置为 0.5：
+### 工作流程示意：
+```
+原始图像 ---> Pass 1 (RGB混合) ---> Pass 2 (Alpha恢复) ---> 输出结果
+                ↑                                           |
+                |                                          |
+                +------------------------------------------+
+                        (用于下一帧的混合)
+```
 
-1. 计算亮度：
-   luminance = 0.299 * 0.2 + 0.587 * 0.2 + 0.114 * 0.2 ≈ 0.2
-
-2. 计算亮度差值：
-   luminanceDifference = 0.2 - 0.5 = -0.3
-
-3. 应用 clamp 函数：
-   val = clamp(-0.3, 0.0, 1.0) = 0.0
-
-4. 最终乘法：
-   result = (0.2, 0.2, 0.2, 1.0) * 0.0 = (0, 0, 0, 0)
-
-这个过程展示了如何将一个不够亮的像素（亮度为0.2，小于阈值0.5）最终变为黑色（0,0,0,0）。
-
-关键点在于 clamp 函数将负值转换为0，然后乘法操作将这个0传播到所有颜色通道，实现了将不够亮的像素置为黑色的目的。
- 
- */
+这种设计确保了运动模糊效果的正确实现，同时保持了适当的Alpha通道值，是一个非常精妙的shader设计。如果只用一个Pass，要么会导致错误的Alpha累积，要么无法正确实现运动模糊效果。
+*/
