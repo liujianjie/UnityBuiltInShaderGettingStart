@@ -810,8 +810,8 @@ GameObject:
   - component: {fileID: 1838242756}
   - component: {fileID: 1838242754}
   - component: {fileID: 1838242753}
-  - component: {fileID: 1838242758}
   - component: {fileID: 1838242759}
+  - component: {fileID: 1838242760}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -893,27 +893,6 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1838242758
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1838242752}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0abeaa60fa8094b838d0612e65658ab0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  fogShader: {fileID: 4800000, guid: 6ca587aa357114cf6ab123394e4de910, type: 3}
-  fogDensity: 1.2
-  fogColor:
-    r: 0.6997255
-    g: 0.7058823
-    b: 0.6955017
-    a: 1
-  fogStart: -1.5
-  fogEnd: 3
 --- !u!114 &1838242759
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -931,6 +910,23 @@ MonoBehaviour:
   endPoint: {x: 0, y: 6, z: -10}
   lookAt: {x: 0, y: -0.4, z: -1.5}
   pingpong: 1
+--- !u!114 &1838242760
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1838242752}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 472d8bded403a0b4591217d37410e864, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  fogShader: {fileID: 4800000, guid: 0eb276d7312278b4480c101d6ae96e33, type: 3}
+  fogDensity: 1
+  fogColor: {r: 0.69803923, g: 0.7058824, b: 0.69411767, a: 1}
+  fogStart: -1.5
+  fogEnd: 3
 --- !u!1 &1927954593
 GameObject:
   m_ObjectHideFlags: 0
