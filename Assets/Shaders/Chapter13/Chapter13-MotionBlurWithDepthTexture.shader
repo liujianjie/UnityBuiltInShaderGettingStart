@@ -113,5 +113,5 @@ Shader "Unity Shaders Book/Chapter 13/Motion Blur With Depth Texture" {
     FallBack Off
 }
 /*
-模型空间-（world矩阵）世界空间-（view矩阵）-观察空间坐标-（project矩阵）裁剪空间-
+模型空间-（world矩阵）世界空间-（view矩阵）-观察空间坐标-（project矩阵）裁剪空间-透视除法执行后才将裁剪坐标系变换到标准化设备坐标系- 视口变换视口变换将标准化设备坐标系到屏幕坐标
 */
