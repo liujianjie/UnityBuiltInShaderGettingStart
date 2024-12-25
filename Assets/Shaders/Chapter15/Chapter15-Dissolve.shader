@@ -87,7 +87,7 @@ Shader "Unity Shaders Book/Chapter 15/Dissolve" {
                 float3 burn = tex2D(_BurnMap, i.uvBurnMap).rgb; // 采样燃烧贴图
 
                 // 根据燃烧值和阙值进行裁剪
-                clip(burn.r - _BurnAmount);
+                clip(burn.r - _BurnAmount); // 小于0被丢弃，采样的燃烧贴图灰白色靠近1，黑色靠近0，所以黑色先消失
 
                 // 采样法线贴图并且解码法线
                 float3 tangentNormal = UnpackNormal(tex2D(_BumpMap, i.uvBumpMap));
@@ -99,7 +99,7 @@ Shader "Unity Shaders Book/Chapter 15/Dissolve" {
                 fixed3 diffuse = _LightColor0.rgb * albedo * max(0, dot(tangentNormal, lightDir));
                 
                 // 计算边缘发光效果
-                fixed burnLine = 1 - smoothstep(0.0, _LineWidth, burn.r - _BurnAmount);
+                fixed burnLine = 1 - smoothstep(0.0, _LineWidth, burn.r - _BurnAmount);     // 被消失的像素（边缘）burnline是靠近1，远离消失的像素（边缘）burnline是靠近0.8
                 fixed3 burnColor = lerp(_BurnFirstColor, _BurnSecondColor, burnLine);       // 靠近被消失范围的圈是第二种颜色，远离的是第一种颜色
                 burnColor = pow(burnColor, 5);
 
@@ -107,8 +107,49 @@ Shader "Unity Shaders Book/Chapter 15/Dissolve" {
                 UNITY_LIGHT_ATTENUATION(atten, i, i.worldPos);
 
                 // 最终颜色计算
-                fixed3 finalColor = lerp(ambient + diffuse * atten, burnColor, burnLine);
+                fixed3 finalColor = lerp(ambient + diffuse * atten, burnColor, burnLine); // 靠近被消失范围的圈是burnColor，远离的是正常环境光漫反射颜色
                 return fixed4(finalColor, 1.0);
+            }
+            ENDCG
+        }
+        Pass{
+            Tags{"LightMode" = "ShadowCaster"}
+               
+            CGPROGRAM
+            
+            #pragma vertex vert
+            #pragma fragment frag
+
+            #pragma multi_compile_shadowcaster
+
+            #include "UnityCG.cginc"
+
+            fixed _BurnAmount;      // 控制消融程度的参数
+            sampler2D _BurnMap;     // 消融贴图
+            float4 _BurnMap_ST;     // 消融贴图的缩放和偏移参数
+
+            struct v2f{
+                V2F_SHADOW_CASTER;
+                float2 uvBurnMap : TEXCOORD1;
+            };
+
+            v2f vert(appdata_base v){
+                v2f o;
+
+                TRANSFER_SHADOW_CASTER_NORMALOFFSET(o);             // 计算阴影投射必需的数据, 给V2F_SHADOW_CASTER数据赋值
+
+                o.uvBurnMap = TRANSFORM_TEX(v.texcoord, _BurnMap);  // 计算消融贴图的UV坐标
+
+                return o;
+            }
+
+            fixed4 frag(v2f i):SV_Target{
+                fixed3 burn = tex2D(_BurnMap, i.uvBurnMap).rgb;     // 采样消融贴图
+
+                clip(burn.r - _BurnAmount);                         // 关键点：根据消融值裁剪片元
+
+                SHADOW_CASTER_FRAGMENT(i);                          // 输出阴影信息  使用V2F_SHADOW_CASTER数据
+                
             }
             ENDCG
         }

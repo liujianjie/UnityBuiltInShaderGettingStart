@@ -308,3 +308,126 @@ fixed4 frag(v2f i) : SV_Target {
 - 剩余部分仍然正常投射阴影
 
 如果没有这个特殊处理的ShadowCaster Pass，就会出现即使物体部分被消融掉了，阴影依然完整的视觉bug。
+
+# 阴影语义
+
+让我详细解释一下 `V2F_SHADOW_CASTER` 的工作原理和数据流向：
+
+1. **V2F_SHADOW_CASTER 的定义**
+```hlsl
+// 在 UnityCG.cginc 中的定义（简化版）
+struct v2f_shadow {
+    V2F_SHADOW_CASTER_NOPOS
+    float4 pos : SV_POSITION;  // 裁剪空间位置
+};
+
+#define V2F_SHADOW_CASTER V2F_SHADOW_CASTER_NOPOS float4 pos : SV_POSITION
+```
+
+2. **数据流向说明**：
+
+```hlsl
+// 1. 顶点着色器中的 TRANSFER_SHADOW_CASTER_NORMALOFFSET 宏
+// 负责设置 V2F_SHADOW_CASTER 中的数据
+TRANSFER_SHADOW_CASTER_NORMALOFFSET(o)
+{
+    // 内部实际进行了这些操作：
+    o.pos = UnityObjectToClipPos(v.vertex);  // 将顶点转换到裁剪空间
+    // 设置其他阴影投射所需的数据
+}
+
+// 2. 片元着色器中的 SHADOW_CASTER_FRAGMENT 宏
+// 使用这些数据计算最终的阴影
+SHADOW_CASTER_FRAGMENT(i)
+{
+    // 内部使用之前传递的数据来计算阴影深度
+    return float4(0,0,0,0);  // 输出阴影信息
+}
+```
+
+3. **完整的数据流程**：
+```hlsl
+// 步骤1：顶点数据输入
+appdata_base v  // 包含位置、法线等基础顶点数据
+
+// 步骤2：顶点着色器处理
+↓
+TRANSFER_SHADOW_CASTER_NORMALOFFSET(o)  // 设置 V2F_SHADOW_CASTER 数据
+↓
+v2f输出（包含处理后的阴影数据）
+
+// 步骤3：片元着色器使用
+↓
+SHADOW_CASTER_FRAGMENT(i)  // 使用传递的数据计算阴影
+```
+
+4. **实际工作原理**：
+```hlsl
+Pass {
+    Tags {"LightMode" = "ShadowCaster"}
+    
+    CGPROGRAM
+    
+    struct v2f {
+        V2F_SHADOW_CASTER;  // 声明需要的阴影数据
+        // ...其他数据
+    };
+    
+    v2f vert(appdata_base v) {
+        v2f o;
+        TRANSFER_SHADOW_CASTER_NORMALOFFSET(o);  // Unity填充阴影数据
+        return o;
+    }
+    
+    fixed4 frag(v2f i) : SV_Target {
+        // 使用传递来的阴影数据
+        SHADOW_CASTER_FRAGMENT(i);  // 输出阴影信息
+    }
+    
+    ENDCG
+}
+```
+
+5. **为什么需要这个结构**：
+- 用于存储阴影映射所需的必要信息
+- 确保正确的阴影投射计算
+- 与Unity的阴影系统集成
+
+6. **数据的实际用途**：
+```hlsl
+// 阴影数据用于：
+- 计算阴影深度
+- 处理阴影偏移
+- 处理透明度裁剪
+- 确保正确的阴影投射
+```
+
+7. **Unity的自动处理**：
+```hlsl
+// Unity会自动：
+1. 设置正确的阴影投射矩阵
+2. 处理不同平台的差异
+3. 管理阴影贴图的采样和存储
+4. 处理阴影级联（如果使用）
+```
+
+8. **注意事项**：
+```hlsl
+// 1. 必须包含正确的Tags
+Tags {"LightMode" = "ShadowCaster"}
+
+// 2. 必须使用正确的宏
+#pragma multi_compile_shadowcaster
+
+// 3. 必须包含正确的头文件
+#include "UnityCG.cginc"
+```
+
+总结：
+- `V2F_SHADOW_CASTER` 是Unity阴影系统的一部分
+- 数据由 `TRANSFER_SHADOW_CASTER_NORMALOFFSET` 设置
+- 数据被 `SHADOW_CASTER_FRAGMENT` 使用
+- Unity自动管理整个阴影计算过程
+- 这是一个完整的数据流，从顶点着色器到片元着色器
+
+这个系统的设计目的是简化阴影处理，让开发者能够专注于自己的着色器逻辑，而不必深入处理阴影计算的细节。
