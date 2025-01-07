@@ -2,6 +2,110 @@
 
 
 
+# 代码解释：frag函数中，bump1和bump2计算原理，为什么要用uv的zw+-speed
+
+让我解释一下这段代码中的原理：
+
+1. bump1 和 bump2 的计算涉及到两个采样，这是为了创建动态水波效果：
+```glsl
+fixed3 bump1 = UnpackNormal(tex2D(_WaveMap, i.uv.zw + speed)).rgb;
+fixed3 bump2 = UnpackNormal(tex2D(_WaveMap, i.uv.zw - speed)).rgb;
+```
+
+2. 为什么使用 uv.zw：
+- 在顶点着色器中，我们定义了 `o.uv` 是一个 float4 类型，其中：
+  - xy 分量存储了 _MainTex 的纹理坐标
+  - zw 分量存储了 _WaveMap 的纹理坐标
+```glsl
+o.uv.xy = TRANSFORM_TEX(v.texcoord, _MainTex); // 主纹理坐标
+o.uv.zw = TRANSFORM_TEX(v.texcoord, _WaveMap); // 波动贴图坐标
+```
+
+3. speed 的计算和使用：
+```glsl
+float2 speed = _Time.y * float2(_WaveXSpeed, _WaveYSpeed);
+```
+- 一个采样点加上 speed（`uv.zw + speed`）
+- 另一个采样点减去 speed（`uv.zw - speed`）
+- 这样的操作会产生两个相反方向移动的法线贴图采样
+
+4. 这种技术的目的：
+- 通过对同一张法线贴图进行两次采样，并且采样位置随时间相反移动
+- 然后将两次采样的法线叠加并归一化：`fixed3 bump = normalize(bump1 + bump2);`
+- 这样可以产生更加复杂和自然的水波动画效果
+- 避免了单一方向采样可能带来的重复感和机械感
+
+这种技术被称为"双重法线贴图采样"或"法线贴图扰动"，是实现逼真水面效果的常用技术。通过两个相反方向的采样，可以模拟出水面波纹相互叠加和干扰的效果，使水面看起来更加自然和动态。
+
+# 代码解释：请你用描述frag函数所做的目的和功能
+
+让我为您详细解析 frag 函数的目的和功能：
+
+这个 frag 函数的主要目的是实现一个逼真的水面渲染效果，它通过结合反射、折射和菲涅尔效应来模拟水面的视觉特性。让我们逐步分析其功能：
+
+1. 基础数据准备：
+```glsl
+float3 worldPos = float3(i.TtoW0.w, i.TtoW1.w, i.TtoW2.w); // 获取片元的世界坐标
+fixed3 viewDir = normalize(UnityWorldSpaceViewDir(worldPos)); // 计算视线方向
+float2 speed = _Time.y * float2(_WaveXSpeed, _WaveYSpeed); // 计算水波动画速度
+```
+
+2. 水波法线计算：
+```glsl
+fixed3 bump1 = UnpackNormal(tex2D(_WaveMap, i.uv.zw + speed)).rgb;
+fixed3 bump2 = UnpackNormal(tex2D(_WaveMap, i.uv.zw - speed)).rgb;
+fixed3 bump = normalize(bump1 + bump2);
+```
+- 通过两次采样和合并法线贴图来创建动态水波效果
+- 使用相反方向的UV偏移来制造波动感
+
+3. 折射效果处理：
+```glsl
+float2 offset = bump.xy * _Distortion * _RefractionTex_TexelSize.xy;
+i.scrPos.xy = offset * i.scrPos.z + i.scrPos.xy;
+fixed3 refrCol = tex2D(_RefractionTex, i.scrPos.xy/i.scrPos.w).rgb;
+```
+- 根据法线和扰动参数计算折射偏移
+- 采样GrabPass获取的屏幕纹理来实现折射效果
+
+4. 反射效果处理：
+```glsl
+bump = normalize(half3(dot(i.TtoW0.xyz, bump), dot(i.TtoW1.xyz, bump), dot(i.TtoW2.xyz, bump)));
+fixed4 texColor = tex2D(_MainTex, i.uv.xy + speed);
+fixed3 reflDir = reflect(-viewDir, bump);
+fixed3 reflCol = texCUBE(_Cubemap, reflDir).rgb * texColor.rgb * _Color.rgb;
+```
+- 将法线转换到世界空间
+- 计算反射方向
+- 采样环境立方体贴图得到反射颜色
+- 将反射颜色与主纹理和主颜色相乘
+
+5. 菲涅尔效应与最终颜色混合：
+```glsl
+fixed fresnel = pow(1 - saturate(dot(viewDir, bump)), 4);
+fixed3 finalColor = reflCol * fresnel + refrCol * (1 - fresnel);
+```
+- 计算菲涅尔系数（用于控制反射和折射的混合比例）
+- 根据视角和法线的夹角决定反射和折射的强度
+- 将反射和折射颜色按菲涅尔系数进行混合
+
+最终效果：
+- 产生逼真的水面外观
+- 具有动态的水波效果
+- 随视角变化的反射/折射混合
+- 真实的环境反射
+- 基于视角的菲涅尔效应
+
+这个片元着色器通过组合多种渲染技术，成功模拟了水面的复杂视觉特性，包括：
+1. 动态水波
+2. 环境反射
+3. 折射变形
+4. 视角相关的反射强度变化
+
+这些效果的叠加使得水面看起来更加真实和自然。
+
+
+
 # 为什么要* v.tangent.w
 
 ```
