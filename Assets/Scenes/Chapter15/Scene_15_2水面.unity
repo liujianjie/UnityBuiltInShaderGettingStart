@@ -621,11 +621,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 131048bc4f9714798b11c61e7521016f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  speed: 2
-  startPoint: {x: 0, y: 1, z: -1}
-  endPoint: {x: 0, y: -0.1, z: -1.2}
-  lookAt: {x: -0.5, y: -0.4, z: 1.5}
-  pingpong: 1
 --- !u!1 &783166091
 GameObject:
   m_ObjectHideFlags: 0
@@ -1086,7 +1081,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: a2ad9086b18784a2e835f86d25c15e49, type: 2}
+  - {fileID: 2100000, guid: 3fc607ea80e09dd4ca6b86bf61ab6f5a, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

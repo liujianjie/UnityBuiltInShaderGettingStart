@@ -1,19 +1,20 @@
 Shader "Unity Shaders Book/Chapter 15/Water Wave" {
     Properties
     {
-        _Color("Main Color", Color) = (0, 0.15, 0.115, 1)
-        _MainTex("Base(RGB)", 2D) = "white" {}
-        _WaveMap("Wave Map", 2D) = "bump" {}
-        _Cubemap("Environment Cubemap", Cube) = "_Skybox"{}
-        _WaveXSpeed("Wave Horizontal Speed", Range(-0.1, 0.1)) = 0.01
-        _WaveYSpeed("Wave Vertical Speed", Range(-0.1, 0.1)) = 0.01
-        _Distortion("Distortion", Range(0, 100)) = 10
+        _Color("Main Color", Color) = (0, 0.15, 0.115, 1)// 主颜色，用于着色。
+        _MainTex("Base(RGB)", 2D) = "white" {}// 主要纹理。
+        _WaveMap("Wave Map", 2D) = "bump" {}// 用于波动效果的法线贴图。
+        _Cubemap("Environment Cubemap", Cube) = "_Skybox"{}// 环境反射使用的立方体贴图。
+        _WaveXSpeed("Wave Horizontal Speed", Range(-0.1, 0.1)) = 0.01// 波动横向移动速度。
+        _WaveYSpeed("Wave Vertical Speed", Range(-0.1, 0.1)) = 0.01// 波动纵向移动速度。
+        _Distortion("Distortion", Range(0, 100)) = 10// 波动导致的扭曲程度。
     }
     SubShader
     {
         // 需要在透明队列中渲染，以便在其它对象之后绘制。
         Tags { "RenderType"="Opaque" "Queue"="Transparent"}
         
+        // 此pass用于获取屏幕上对象后的图像，并存储到纹理中。
         GrabPass{"_RefractionTex"}
 
         Pass {
@@ -52,55 +53,60 @@ Shader "Unity Shaders Book/Chapter 15/Water Wave" {
             // 顶点着色器输出结构
             struct v2f{
                 float4 pos : SV_POSITION;     // 裁剪空间的位置
-                float2 scrPos : TEXCOORD0; // 主纹理的UV坐标
-                float2 uv : TEXCOORD1; // 法线贴图的UV坐标
-                float2 TtoW0 : TEXCOORD2; // 燃烧贴图的UV坐标
-                float3 TtoW1 : TEXCOORD3;  // 切线空间下的光照方向
-                float3 TtoW2 : TEXCOORD4;  // 世界空间位置
+                float4 scrPos : TEXCOORD0;   // 屏幕空间位置，用于抓取纹理
+                float4 uv : TEXCOORD1;      // 纹理坐标
+                float4 TtoW0 : TEXCOORD2; 
+                float4 TtoW1 : TEXCOORD3; 
+                float4 TtoW2 : TEXCOORD4; 
             };
 
             // 顶点着色器
-            v2f vert(a2v  v){ // appdata_tan是Unity内置的包含切线信息的顶点输入结构
+            v2f vert(a2v  v){
                 v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex); // 转换到裁剪空间
-                o.scrPos = ComputeGrabScreenPos(o.pos);
-                o.uv.xy = TRANSFORM_TEX(v.texcoord, _MainTex);
-                o.uv.zw = TRANSFORM_TEX(v.texcoord, _WaveMap);
+                o.pos = UnityObjectToClipPos(v.vertex); // 转换为裁剪空间坐标
+                o.scrPos = ComputeGrabScreenPos(o.pos); // 计算屏幕空间位置
+                o.uv.xy = TRANSFORM_TEX(v.texcoord, _MainTex); // 纹理坐标变换
+                o.uv.zw = TRANSFORM_TEX(v.texcoord, _WaveMap); // 波动贴图坐标变换
 
-                float3 worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                fixed3 worldNormal = UnityObjectToWorldNormal(v.normal);
-                fixed3 worldTangent = UnityObjectToWorldDir(v.tangent.xyz);
-                fixed3 worldBinoraml = cross(worldNormal, worldTangent) * v.tangent.w; 
+                float3 worldPos = mul(unity_ObjectToWorld, v.vertex).xyz; // 转换到世界坐标
+                fixed3 worldNormal = UnityObjectToWorldNormal(v.normal); // 世界法线
+                fixed3 worldTangent = UnityObjectToWorldDir(v.tangent.xyz); // 世界切线
+                fixed3 worldBinormal = cross(worldNormal, worldTangent) * v.tangent.w; // 世界副法线， * v.tangent.w 是为了方向z正方向向内还是外
 
+                // 切线空间到世界空间矩阵
                 o.TtoW0 = float4(worldTangent.x, worldBinormal.x, worldNormal.x, worldPos.x);
                 o.TtoW1 = float4(worldTangent.y, worldBinormal.y, worldNormal.y, worldPos.y);
-                o.TtoW2 = float4(worldTangent.z, worldBinoraml.z, worldNormal.z, worldPos.z);
+                o.TtoW2 = float4(worldTangent.z, worldBinormal.z, worldNormal.z, worldPos.z);
 
                 return o;
             }
             // 片元
             float4 frag(v2f i) : SV_Target{
-                float3 worldPos = float3(i.TtoW0.w, i.Ttow1.w, i.Ttow2.w);
-                fixed3 viewDir = normalize(UnityWorldSpaceViewDir(worldPos));
-                float2 speed = _Time.y * float2(_WaveXSpeed, _WaveYSpeed);
+                float3 worldPos = float3(i.TtoW0.w, i.TtoW1.w, i.TtoW2.w);  // 提取世界坐标
+                fixed3 viewDir = normalize(UnityWorldSpaceViewDir(worldPos)); // 视线方向
+                float2 speed = _Time.y * float2(_WaveXSpeed, _WaveYSpeed);  // 波动速度计算
 
-                fixed3 bump1 = UnpackNormal(tex2D(_WaveMap, i.uv.zw + speed)).rgb;
-                fixed3 bump2 = UnpackNormal(tex2D(_WaveMap, i.uv.zw - speed)).rgb;
-                fixed3 bump = normalize(bump1 + bump2);
+                // 获取切线空间法线
+                fixed3 bump1 = UnpackNormal(tex2D(_WaveMap, i.uv.zw + speed)).rgb;  // 采样水波噪声贴图
+                fixed3 bump2 = UnpackNormal(tex2D(_WaveMap, i.uv.zw - speed)).rgb;  // 采样水波噪声贴图
+                fixed3 bump = normalize(bump1 + bump2);                     // 归一化组合后的法线
 
+                // 在切线空间中计算偏移
+                // 使用法线来扭曲屏幕采样坐标，产生折射效果
                 float2 offset = bump.xy * _Distortion * _RefractionTex_TexelSize.xy;
-                i.scrPos.xy = offset * i.scrPos.z + i.scrPos.xy;
-                fixed3 refrCol = tex2D(_RefractionTex, i.scrPos.xy / i.scrPos.w).rgb;
+                i.scrPos.xy = offset * i.scrPos.z + i.scrPos.xy;            // * z是为了让远处的水偏移更明显
+                fixed3 refrCol = tex2D(_RefractionTex, i.scrPos.xy / i.scrPos.w).rgb; // 折射颜色
 
+                // 将法线转换到世界空间
                 bump = normalize(half3(dot(i.TtoW0.xyz, bump), dot(i.TtoW1.xyz, bump), dot(i.TtoW2.xyz, bump)));
-                fixed4 texColor = tex2D(_MainTex, i.uv.xy + speed);
-                fixed3 reflDir = reflect(-viewDir, bump);
-                fixed3 reflCol = texCUBE(_Cubemap, reflDir).rgb * texColor.rgb * _COlor.rgb;
+                fixed4 texColor = tex2D(_MainTex, i.uv.xy + speed); // 获取着色纹理颜色 - 水的主要颜色
+                fixed3 reflDir = reflect(-viewDir, bump);           // 计算反射方向
+                fixed3 reflCol = texCUBE(_Cubemap, reflDir).rgb * texColor.rgb * _Color.rgb;    // 反射颜色
 
-                fixed fresnel = pow(1 - saturate(dot(viewDir, bump)), 4);
-                fixed3 finalColor = reflCol * fresnel + refrCol * (1 - fresnel);
+                fixed fresnel = pow(1 - saturate(dot(viewDir, bump)), 4);       // 计算菲涅尔效应
+                fixed3 finalColor = reflCol * fresnel + refrCol * (1 - fresnel);  // 最终颜色组合
 
-                return fixed4(finalColor, 1);
+                return fixed4(finalColor, 1);           // 返回最终颜色，alpha为1使其不透明
             }
             ENDCG
         }
